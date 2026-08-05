@@ -122,6 +122,18 @@ const (
 	// renovate: datasource=github-tags depName=docker/setup-qemu-action
 	SetupQemuActionVersion = "v4.2.0"
 	SetupQemuActionRef     = "96fe6ef7f33517b61c61be40b68a1882f3264fb8"
+	// SopsVersion is the pinned SOPS binary used by generated self-hosted
+	// workflows. Keep the checksums below in lockstep with this version.
+	// renovate: datasource=github-releases depName=getsops/sops
+	SopsVersion          = "v3.13.3"
+	SopsLinuxAmd64SHA256 = "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b"
+	SopsLinuxArm64SHA256 = "53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77"
+	// YqVersion is the pinned yq binary used by generated self-hosted
+	// workflows. Keep the checksums below in lockstep with this version.
+	// renovate: datasource=github-releases depName=mikefarah/yq
+	YqVersion          = "v4.53.3"
+	YqLinuxAmd64SHA256 = "fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+	YqLinuxArm64SHA256 = "578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
 	// SetupHelmActionVersion is the version of setup-helm github action.
 	// renovate: datasource=github-tags depName=Azure/setup-helm
 	SetupHelmActionVersion = "v5.0.1"
