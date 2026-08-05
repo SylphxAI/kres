@@ -187,6 +187,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			},
 			Jobs: map[string]*Job{
 				slackJobName: {
+					Env: map[string]string{
+						"SLACK_WEBHOOK": "${{ secrets.SLACK_WEBHOOK }}",
+					},
 					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					If:     "github.event.workflow_run.conclusion != 'skipped'",
 					Steps: []*JobStep{
@@ -203,8 +206,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 								"slackapi/slack-github-action@"+config.SlackNotifyActionRef,
 								"version: "+config.SlackNotifyActionVersion,
 							).
-							SetWith("token", "${{ secrets.SLACK_BOT_TOKEN_V2 }}").
-							SetWith("method", "chat.postMessage").
+							SetCustomCondition("env.SLACK_WEBHOOK != ''").
+							SetWith("webhook", "${{ env.SLACK_WEBHOOK }}").
+							SetWith("webhook-type", "incoming-webhook").
 							SetWith("payload", DefaultSlackNotifyPayload("", true)),
 					},
 				},
@@ -222,6 +226,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			Permissions: map[string]PermissionAction{},
 			Jobs: map[string]*Job{
 				slackJobName: {
+					Env: map[string]string{
+						"SLACK_WEBHOOK": "${{ secrets.SLACK_WEBHOOK }}",
+					},
 					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					If:     "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event != 'pull_request'",
 					Steps: []*JobStep{
@@ -230,8 +237,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 								"slackapi/slack-github-action@"+config.SlackNotifyActionRef,
 								"version: "+config.SlackNotifyActionVersion,
 							).
-							SetWith("token", "${{ secrets.SLACK_BOT_TOKEN_V2 }}").
-							SetWith("method", "chat.postMessage").
+							SetCustomCondition("env.SLACK_WEBHOOK != ''").
+							SetWith("webhook", "${{ env.SLACK_WEBHOOK }}").
+							SetWith("webhook-type", "incoming-webhook").
 							SetWith("payload", DefaultSlackNotifyPayload(slackChannel, false)),
 					},
 				},
@@ -588,14 +596,22 @@ func DefaultJobPermissions() map[string]PermissionAction {
 	}
 }
 
-const buildxConfigDir = "${{ runner.temp }}/kres-buildx"
+// ConfigureBuildxEnvironmentStep persists isolated Buildx configuration for
+// every later step in the job. setup-buildx-action records its selected builder
+// under BUILDX_CONFIG; setting that variable only on the action step loses the
+// selected docker-container builder before a later `docker buildx build` runs.
+// RUNNER_TEMP is unique to the job, so candidate-local Buildx state cannot
+// affect another job on a persistent self-hosted runner.
+func ConfigureBuildxEnvironmentStep() *JobStep {
+	return Step("Configure Docker Buildx environment").SetCommand(`mkdir -p "$RUNNER_TEMP/kres-buildx"
+printf '%s\n' "BUILDX_CONFIG=$RUNNER_TEMP/kres-buildx" >> "$GITHUB_ENV"`)
+}
 
 // buildxSetupStep configures an isolated local Buildx builder. The former
 // upstream TCP endpoint is not part of the Sylphx execution-plane contract;
 // every owned runner brings its own Docker daemon. The docker-container driver
 // keeps builder lifecycle local to the candidate while QEMU provides the
-// required non-native build architectures. runner.temp is unique to the job,
-// so runner-local Buildx state cannot affect a candidate.
+// required non-native build architectures.
 func buildxSetupStep(with map[string]string, timeoutMinutes int) *JobStep {
 	return &JobStep{
 		Name: "Set up Docker Buildx",
@@ -604,11 +620,15 @@ func buildxSetupStep(with map[string]string, timeoutMinutes int) *JobStep {
 			Image:   "docker/setup-buildx-action@" + config.SetupBuildxActionRef,
 			Comment: "version: " + config.SetupBuildxActionVersion,
 		},
-		With: with,
-		Env: map[string]string{
-			"BUILDX_CONFIG": buildxConfigDir,
-		},
+		With:           with,
 		TimeoutMinutes: timeoutMinutes,
+	}
+}
+
+func buildxSetupSteps(with map[string]string, timeoutMinutes int) []*JobStep {
+	return []*JobStep{
+		ConfigureBuildxEnvironmentStep(),
+		buildxSetupStep(with, timeoutMinutes),
 	}
 }
 
@@ -628,9 +648,10 @@ func SetupQemuStep() *JobStep {
 	}
 }
 
-// SetupBuildxStep returns the local Buildx setup step.
-func SetupBuildxStep() *JobStep {
-	return buildxSetupStep(map[string]string{
+// SetupBuildxSteps returns the persistent environment setup and the local
+// Buildx action in their required order.
+func SetupBuildxSteps() []*JobStep {
+	return buildxSetupSteps(map[string]string{
 		"driver": "docker-container",
 	}, 10)
 }
@@ -665,11 +686,9 @@ printf '%s\n' \
 
 // DefaultSteps returns default steps for the workflow.
 func DefaultSteps() []*JobStep {
-	return append(
-		CommonSteps(),
-		SetupQemuStep(),
-		SetupBuildxStep(),
-	)
+	steps := append(CommonSteps(), SetupQemuStep())
+
+	return append(steps, SetupBuildxSteps()...)
 }
 
 // DefaultPkgsSteps returns default pkgs steps for the workflow.
@@ -678,11 +697,9 @@ func DefaultSteps() []*JobStep {
 // arm64 endpoint no longer exists in the Sylphx execution plane; the local
 // QEMU-backed builder provides the same cross-architecture capability.
 func DefaultPkgsSteps(_ bool) []*JobStep {
-	return append(
-		CommonSteps(),
-		SetupQemuStep(),
-		buildxSetupStep(map[string]string{"driver": "docker-container"}, 0),
-	)
+	steps := append(CommonSteps(), SetupQemuStep())
+
+	return append(steps, buildxSetupSteps(map[string]string{"driver": "docker-container"}, 0)...)
 }
 
 // SOPSSteps returns SOPS steps for the workflow.
