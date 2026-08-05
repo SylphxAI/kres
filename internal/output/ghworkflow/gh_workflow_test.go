@@ -209,24 +209,31 @@ func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
 
 func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	packageSteps := ghworkflow.DefaultPkgsSteps(false)
+	defaultSteps := ghworkflow.SetupBuildxSteps()
 
 	for _, tc := range []struct {
-		step *ghworkflow.JobStep
-		name string
+		steps []*ghworkflow.JobStep
+		name  string
 	}{
 		{
-			name: "default workflow",
-			step: ghworkflow.SetupBuildxStep(),
+			name:  "default workflow",
+			steps: defaultSteps,
 		},
 		{
-			name: "package workflow",
-			step: packageSteps[len(packageSteps)-1],
+			name:  "package workflow",
+			steps: packageSteps[len(packageSteps)-2:],
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, "docker-container", tc.step.With["driver"])
-			require.NotContains(t, tc.step.With, "endpoint")
-			require.Equal(t, "${{ runner.temp }}/kres-buildx", tc.step.Env["BUILDX_CONFIG"])
+			require.Len(t, tc.steps, 2)
+			require.Equal(t, "Configure Docker Buildx environment", tc.steps[0].Name)
+			require.Contains(t, tc.steps[0].Run, "BUILDX_CONFIG=$RUNNER_TEMP/kres-buildx")
+			require.Contains(t, tc.steps[0].Run, `>> "$GITHUB_ENV"`)
+
+			buildx := tc.steps[1]
+			require.Equal(t, "docker-container", buildx.With["driver"])
+			require.NotContains(t, buildx.With, "endpoint")
+			require.Empty(t, buildx.Env)
 		})
 	}
 

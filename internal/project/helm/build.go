@@ -281,14 +281,13 @@ func (helm *Build) CompileGitHubWorkflow(output *ghworkflow.Output) error {
 		ghworkflow.ConfigureHelmEnvironmentStep(),
 	)
 
-	jobSteps := []*ghworkflow.JobStep{
-		ghworkflow.SetupBuildxStep(),
+	jobSteps := append(ghworkflow.SetupBuildxSteps(), []*ghworkflow.JobStep{
 		ghworkflow.SetupHelmStep(),
 		ghworkflow.ConfigureHelmEnvironmentStep(),
 		loginStep,
 		lintStep,
 		templateStep,
-	}
+	}...)
 
 	// Add steps for unit tests
 	jobSteps = append(jobSteps, []*ghworkflow.JobStep{unittestPluginInstallStep, unittestStep}...)
