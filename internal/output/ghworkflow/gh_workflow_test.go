@@ -73,6 +73,30 @@ func (suite *GHWorkflowSuite) TestDefaultWorkflows() {
 
 	suite.Require().NoError(o.GenerateFile(ghworkflow.SlackCIFailureWorkflow, &slackBuf))
 	assertGolden(suite.T(), ghworkflow.SlackCIFailureWorkflow, slackBuf.Bytes())
+
+	for _, workflow := range []string{".github/workflows/lock.yml", ".github/workflows/stale.yml"} {
+		var buf bytes.Buffer
+
+		suite.Require().NoError(o.GenerateFile(workflow, &buf))
+		assertGolden(suite.T(), workflow, buf.Bytes())
+	}
+}
+
+func TestAddWorkflowAddsMergeGroupForPullRequestWorkflow(t *testing.T) {
+	o := ghworkflow.NewOutput("main", false, false, "")
+	workflow := &ghworkflow.Workflow{
+		Name: "candidate",
+		On: ghworkflow.On{
+			PullRequest: ghworkflow.PullRequest{
+				Branches: ghworkflow.Branches{"main"},
+			},
+		},
+	}
+
+	o.AddWorkflow("candidate", workflow)
+
+	require.NotNil(t, workflow.MergeGroup)
+	assert.Equal(t, []string{"checks_requested"}, workflow.MergeGroup.Types)
 }
 
 func TestSetConditionsNotCancelled(t *testing.T) {
@@ -116,9 +140,9 @@ func TestSetConditionsRaw(t *testing.T) {
 			wantIf:     "startsWith(github.event.pull_request.title, 'release(')",
 		},
 		{
-			name:       "raw combined with keyword",
+			name:       "raw combined with candidate keyword",
 			conditions: []string{"on-pull-request", "raw:github.actor != 'dependabot[bot]'"},
-			wantIf:     "github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'",
+			wantIf:     "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && github.actor != 'dependabot[bot]'",
 		},
 		{
 			name:       "raw expression is trimmed",
@@ -152,6 +176,88 @@ func TestSetConditionsRaw(t *testing.T) {
 
 			require.NoError(t, jobErr)
 			require.NoError(t, stepErr)
+			assert.Equal(t, tc.wantIf, job.If)
+			assert.Equal(t, tc.wantIf, step.If)
+		})
+	}
+}
+
+func TestParallelJobTreatsMergeGroupAsIntegrationCandidate(t *testing.T) {
+	o := ghworkflow.NewOutput("main", true, false, "")
+	o.SetRunnerGroup(ghworkflow.GenericRunner)
+	o.AddStepInParallelJob("candidate", ghworkflow.GenericRunner, nil, ghworkflow.Step("test"))
+
+	var buf bytes.Buffer
+
+	require.NoError(t, o.GenerateFile(ghworkflow.CiWorkflow, &buf))
+	assert.Contains(t, buf.String(), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
+}
+
+func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
+	step := ghworkflow.SetupHelmStep()
+
+	require.Equal(t, "Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310", step.Uses.Image)
+	require.Equal(t, "version: v5.0.1", step.Uses.Comment)
+	require.Equal(t, "v3.21.3", step.With["version"])
+
+	environment := ghworkflow.ConfigureHelmEnvironmentStep()
+	require.Contains(t, environment.Run, "HELM_CONFIG_HOME=$RUNNER_TEMP/kres-helm/config")
+	require.Contains(t, environment.Run, "HELM_CACHE_HOME=$RUNNER_TEMP/kres-helm/cache")
+	require.Contains(t, environment.Run, "HELM_DATA_HOME=$RUNNER_TEMP/kres-helm/data")
+	require.Contains(t, environment.Run, `>> "$GITHUB_ENV"`)
+}
+
+func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
+	packageSteps := ghworkflow.DefaultPkgsSteps(false)
+
+	for _, tc := range []struct {
+		step *ghworkflow.JobStep
+		name string
+	}{
+		{
+			name: "default workflow",
+			step: ghworkflow.SetupBuildxStep(),
+		},
+		{
+			name: "package workflow",
+			step: packageSteps[len(packageSteps)-1],
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, "docker-container", tc.step.With["driver"])
+			require.NotContains(t, tc.step.With, "endpoint")
+			require.Equal(t, "${{ runner.temp }}/kres-buildx", tc.step.Env["BUILDX_CONFIG"])
+		})
+	}
+
+	qemu := ghworkflow.SetupQemuStep()
+	require.Equal(t, "all", qemu.With["platforms"])
+	require.Contains(t, qemu.Uses.Image, "docker/setup-qemu-action@")
+}
+
+func TestSetConditionsTreatMergeGroupAsIntegrationCandidate(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		wantIf     string
+		conditions []string
+	}{
+		{
+			name:       "on pull request includes merge group",
+			conditions: []string{"on-pull-request"},
+			wantIf:     "(github.event_name == 'pull_request' || github.event_name == 'merge_group')",
+		},
+		{
+			name:       "except pull request excludes merge group",
+			conditions: []string{"except-pull-request"},
+			wantIf:     "github.event_name != 'pull_request' && github.event_name != 'merge_group'",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			job := &ghworkflow.Job{}
+			step := ghworkflow.Step("test")
+
+			require.NoError(t, job.SetConditions(tc.conditions...))
+			require.NoError(t, step.SetConditions(tc.conditions...))
 			assert.Equal(t, tc.wantIf, job.If)
 			assert.Equal(t, tc.wantIf, step.If)
 		})

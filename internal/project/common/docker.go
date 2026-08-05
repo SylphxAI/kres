@@ -6,6 +6,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/siderolabs/kres/internal/config"
 	"github.com/siderolabs/kres/internal/dag"
@@ -62,7 +63,9 @@ func (docker *Docker) CompileMakefile(output *makefile.Output) error {
 
 	output.VariableGroup(makefile.VariableGroupCommon).
 		Variable(makefile.OverridableVariable("REGISTRY", "ghcr.io")).
-		Variable(makefile.OverridableVariable("USERNAME", docker.meta.GitHubOrganization)).
+		// OCI image references require a lowercase namespace. GitHub organization
+		// logins preserve display casing, but the emitted registry identity must not.
+		Variable(makefile.OverridableVariable("USERNAME", strings.ToLower(docker.meta.GitHubOrganization))).
 		Variable(makefile.OverridableVariable("REGISTRY_AND_USERNAME", "$(REGISTRY)/$(USERNAME)"))
 
 	output.VariableGroup(makefile.VariableGroupDocker).

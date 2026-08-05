@@ -8,7 +8,7 @@ post-commit:
     conformance:
       run: make conformance
       env:
-        USERNAME: siderolabs
+        USERNAME: SylphxAI
 pre-commit:
   jobs:
     - name: fix
@@ -18,17 +18,17 @@ pre-commit:
           - name: generate
             run: make generate
             env:
-              USERNAME: siderolabs
+              USERNAME: SylphxAI
             stage_fixed: true
           - name: fmt
             run: make fmt
             env:
-              USERNAME: siderolabs
+              USERNAME: SylphxAI
             stage_fixed: true
           - name: lint-fmt
             run: make lint-fmt
             env:
-              USERNAME: siderolabs
+              USERNAME: SylphxAI
             stage_fixed: true
     - name: lint
       group:
@@ -37,4 +37,4 @@ pre-commit:
           - name: lint
             run: make lint
             env:
-              USERNAME: siderolabs
+              USERNAME: SylphxAI

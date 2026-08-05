@@ -67,6 +67,8 @@ jobs:
         with:
           driver: remote
           endpoint: tcp://buildkit-amd64.ci.svc.cluster.local:1234
+        env:
+          BUILDX_CONFIG: ${{ runner.temp }}/kres-buildx
         timeout-minutes: 10
       - name: Retrieve PR labels
         id: retrieve-pr-labels

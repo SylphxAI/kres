@@ -33,6 +33,7 @@ type Concurrency struct {
 type On struct {
 	Push              `yaml:"push,omitempty"`
 	PullRequest       `yaml:"pull_request,omitempty"`
+	MergeGroup        *MergeGroup `yaml:"merge_group,omitempty"`
 	WorkFlowRun       `yaml:"workflow_run,omitempty"`
 	*WorkFlowDispatch `yaml:"workflow_dispatch,omitempty"`
 
@@ -48,6 +49,12 @@ type PullRequest struct {
 
 	Types []string `yaml:"types,omitempty"`
 	Paths []string `yaml:"paths,omitempty"`
+}
+
+// MergeGroup represents GitHub's merge queue candidate event filters.
+// A merge queue requests checks before it may land a candidate.
+type MergeGroup struct {
+	Types []string `yaml:"types,omitempty"`
 }
 
 // Schedule represents GitHub Actions schedule filters.
@@ -199,7 +206,16 @@ func NewRunsOnSlice(runners []string) RunsOn {
 }
 
 // NewRunsOnGroupLabel creates a RunsOn from a group and label.
+//
+// The generic Kres runner is a compatibility alias for the Sylphx-owned Linux
+// profile. It must resolve to an explicit self-hosted label set rather than a
+// GitHub-hosted image or an opaque group: this preserves repository-local
+// workflow portability while making generated candidates select owned compute.
 func NewRunsOnGroupLabel(group, label string) RunsOn {
+	if group == GenericRunner && label == "" {
+		return NewRunsOnSlice([]string{SelfHostedRunnerLabel, SylphxLinuxStandardRunnerLabel})
+	}
+
 	return RunsOn{value: RunsOnGroupLabel{Group: group, Label: label}}
 }
 

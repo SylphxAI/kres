@@ -66,6 +66,9 @@ const (
 	// GrpcGoVersion is the version of grpc.
 	// renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	GrpcGoVersion = "v1.6.2"
+	// HelmCLIVersion is the version of the Helm CLI provisioned for generated workflows.
+	// renovate: datasource=github-releases depName=helm/helm
+	HelmCLIVersion = "v3.21.3"
 	// HelmUnitTestVersion is the version of helm unit test plugin.
 	// renovate: datasource=github-tags depName=helm-unittest/helm-unittest
 	HelmUnitTestVersion = "v1.1.1"
@@ -115,6 +118,14 @@ const (
 	// renovate: datasource=github-tags depName=docker/setup-buildx-action
 	SetupBuildxActionVersion = "v4.2.0"
 	SetupBuildxActionRef     = "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"
+	// SetupQemuActionVersion is the version of setup-qemu github action.
+	// renovate: datasource=github-tags depName=docker/setup-qemu-action
+	SetupQemuActionVersion = "v4.2.0"
+	SetupQemuActionRef     = "96fe6ef7f33517b61c61be40b68a1882f3264fb8"
+	// SetupHelmActionVersion is the version of setup-helm github action.
+	// renovate: datasource=github-tags depName=Azure/setup-helm
+	SetupHelmActionVersion = "v5.0.1"
+	SetupHelmActionRef     = "9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310"
 	// SetupNodeActionVersion is the version of setup-node github action.
 	// renovate: datasource=github-tags depName=actions/setup-node
 	SetupNodeActionVersion = "v6.4.0"

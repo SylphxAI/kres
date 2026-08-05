@@ -26,12 +26,25 @@ import (
 )
 
 const (
-	// GenericRunner is the name of the generic runner.
+	// GenericRunner is the Kres compatibility alias for the default owned
+	// Linux runner profile. NewRunsOnGroupLabel resolves it to explicit labels.
 	GenericRunner = "generic"
+	// SelfHostedRunnerLabel is GitHub Actions' required label for self-hosted
+	// runners. Generated jobs pair it with a stable Sylphx profile label.
+	SelfHostedRunnerLabel = "self-hosted"
+	// SylphxLinuxStandardRunnerLabel selects the default Sylphx-owned Linux CI
+	// profile. It prevents a silent fallback to GitHub-hosted ubuntu-* runners.
+	SylphxLinuxStandardRunnerLabel = "sylphx-linux-standard"
 	// PkgsRunner is the name of the default runner for packages.
 	PkgsRunner = "pkgs"
 	// DefaultSkipCondition is the default condition to skip the workflow.
 	DefaultSkipCondition = "(!startsWith(github.head_ref, 'renovate/') && !startsWith(github.head_ref, 'dependabot/'))"
+
+	// integrationCandidateCondition identifies both a PR head and the merge
+	// queue's synthetic candidate. Required source checks must treat them as
+	// equivalent candidates; only the latter is authoritative admission.
+	integrationCandidateCondition    = "(github.event_name == 'pull_request' || github.event_name == 'merge_group')"
+	nonIntegrationCandidateCondition = "github.event_name != 'pull_request' && github.event_name != 'merge_group'"
 
 	// IssueLabelRetrieveScript is the default script to retrieve issue labels.
 	IssueLabelRetrieveScript = `
@@ -122,15 +135,8 @@ func (p Permissions) IsZero() bool {
 	return p == nil
 }
 
-var (
-	//go:embed files/slack-notify-payload.json
-	slackNotifyPayload string
-
-	armbuildkitdEnpointConfig = `
-- endpoint: tcp://buildkit-arm64.ci.svc.cluster.local:1234
-  platforms: linux/arm64
-`
-)
+//go:embed files/slack-notify-payload.json
+var slackNotifyPayload string
 
 // Output implements GitHub Actions project config generation.
 type Output struct {
@@ -163,6 +169,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 						"release-*",
 					},
 				},
+				MergeGroup: &MergeGroup{
+					Types: []string{"checks_requested"},
+				},
 			},
 		},
 		slackWorkflow: {
@@ -178,10 +187,8 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			},
 			Jobs: map[string]*Job{
 				slackJobName: {
-					RunsOn: RunsOn{value: RunsOnGroupLabel{
-						Group: GenericRunner,
-					}},
-					If: "github.event.workflow_run.conclusion != 'skipped'",
+					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
+					If:     "github.event.workflow_run.conclusion != 'skipped'",
 					Steps: []*JobStep{
 						Step("Get PR number").
 							SetID("get-pr-number").
@@ -215,10 +222,8 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			Permissions: map[string]PermissionAction{},
 			Jobs: map[string]*Job{
 				slackJobName: {
-					RunsOn: RunsOn{value: RunsOnGroupLabel{
-						Group: GenericRunner,
-					}},
-					If: "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event != 'pull_request'",
+					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
+					If:     "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event != 'pull_request'",
 					Steps: []*JobStep{
 						Step("Slack Notify").
 							SetUsesWithComment(
@@ -249,7 +254,7 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			},
 			Jobs: map[string]*Job{
 				"action": {
-					RunsOn: RunsOn{[]string{"ubuntu-latest"}},
+					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					Steps: []*JobStep{
 						{
 							Name: "Lock old issues",
@@ -283,7 +288,7 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			},
 			Jobs: map[string]*Job{
 				"stale": {
-					RunsOn: RunsOn{[]string{"ubuntu-latest"}},
+					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					Steps: []*JobStep{
 						{
 							Name: "Close stale issues and PRs",
@@ -336,7 +341,26 @@ func (o *Output) AddWorkflow(name string, workflow *Workflow) {
 		panic(fmt.Sprintf("workflow %s is reserved", file))
 	}
 
+	addMergeGroupTrigger(workflow)
+
 	o.workflows[file] = workflow
+}
+
+// addMergeGroupTrigger makes each generated pull-request workflow eligible to
+// supply its required check to GitHub's merge queue. `merge_group` cannot
+// retain pull-request path or branch filters, so the generated candidate runs
+// conservatively; CI code remains responsible for any finer-grained work
+// selection.
+func addMergeGroupTrigger(workflow *Workflow) {
+	if workflow == nil || workflow.MergeGroup != nil || !workflowHasPullRequestTrigger(workflow.PullRequest) {
+		return
+	}
+
+	workflow.MergeGroup = &MergeGroup{Types: []string{"checks_requested"}}
+}
+
+func workflowHasPullRequestTrigger(pullRequest PullRequest) bool {
+	return len(pullRequest.Branches) > 0 || len(pullRequest.Types) > 0 || len(pullRequest.Paths) > 0
 }
 
 // AddJob adds job to the default workflow.
@@ -434,14 +458,10 @@ func (o *Output) AddStepInParallelJob(jobName string, runnerGroup string, needsO
 
 	if o.workflows[CiWorkflow].Jobs[jobName] == nil {
 		o.workflows[CiWorkflow].Jobs[jobName] = &Job{
-			RunsOn: RunsOn{
-				value: RunsOnGroupLabel{
-					Group: runnerGroup,
-				},
-			},
-			If:    "github.event_name == 'pull_request'",
-			Needs: needs,
-			Steps: DefaultSteps(),
+			RunsOn: NewRunsOnGroupLabel(runnerGroup, ""),
+			If:     integrationCandidateCondition,
+			Needs:  needs,
+			Steps:  DefaultSteps(),
 		}
 	}
 
@@ -514,20 +534,14 @@ func (o *Output) AddSlackNotifyForFailure(workflow string) {
 	o.workflows[SlackCIFailureWorkflow].Workflows = append(o.workflows[SlackCIFailureWorkflow].Workflows, workflow)
 }
 
-// SetRunnerGroup allows to set custom runners for the default job.
-// If runner is empty, it will be set to "generic".
+// SetRunnerGroup allows callers to choose a runner group for the default job.
+// An empty group uses Kres' explicit owned self-hosted default profile.
 func (o *Output) SetRunnerGroup(runner string) {
 	if runner == "" {
-		o.workflows[CiWorkflow].Jobs[DefaultJobName].RunsOn = RunsOn{value: RunsOnGroupLabel{
-			Group: GenericRunner,
-		}}
-
-		return
+		runner = GenericRunner
 	}
 
-	o.workflows[CiWorkflow].Jobs[DefaultJobName].RunsOn = RunsOn{value: RunsOnGroupLabel{
-		Group: runner,
-	}}
+	o.workflows[CiWorkflow].Jobs[DefaultJobName].RunsOn = NewRunsOnGroupLabel(runner, "")
 }
 
 // SetOptionsForPkgs overwrites default job steps and services for pkgs.
@@ -574,8 +588,15 @@ func DefaultJobPermissions() map[string]PermissionAction {
 	}
 }
 
-// SetupBuildxStep returns the buildx setup step.
-func SetupBuildxStep() *JobStep {
+const buildxConfigDir = "${{ runner.temp }}/kres-buildx"
+
+// buildxSetupStep configures an isolated local Buildx builder. The former
+// upstream TCP endpoint is not part of the Sylphx execution-plane contract;
+// every owned runner brings its own Docker daemon. The docker-container driver
+// keeps builder lifecycle local to the candidate while QEMU provides the
+// required non-native build architectures. runner.temp is unique to the job,
+// so runner-local Buildx state cannot affect a candidate.
+func buildxSetupStep(with map[string]string, timeoutMinutes int) *JobStep {
 	return &JobStep{
 		Name: "Set up Docker Buildx",
 		ID:   "setup-buildx",
@@ -583,44 +604,84 @@ func SetupBuildxStep() *JobStep {
 			Image:   "docker/setup-buildx-action@" + config.SetupBuildxActionRef,
 			Comment: "version: " + config.SetupBuildxActionVersion,
 		},
-		With: map[string]string{
-			"driver":   "remote",
-			"endpoint": "tcp://buildkit-amd64.ci.svc.cluster.local:1234",
+		With: with,
+		Env: map[string]string{
+			"BUILDX_CONFIG": buildxConfigDir,
 		},
-		TimeoutMinutes: 10,
+		TimeoutMinutes: timeoutMinutes,
 	}
+}
+
+// SetupQemuStep registers supported non-native CPU emulators before Buildx
+// creates its builder. This is required for the generated multi-architecture
+// image targets and keeps the architecture capability on owned compute.
+func SetupQemuStep() *JobStep {
+	return &JobStep{
+		Name: "Set up QEMU",
+		Uses: ActionRef{
+			Image:   "docker/setup-qemu-action@" + config.SetupQemuActionRef,
+			Comment: "version: " + config.SetupQemuActionVersion,
+		},
+		With: map[string]string{
+			"platforms": "all",
+		},
+	}
+}
+
+// SetupBuildxStep returns the local Buildx setup step.
+func SetupBuildxStep() *JobStep {
+	return buildxSetupStep(map[string]string{
+		"driver": "docker-container",
+	}, 10)
+}
+
+// SetupHelmStep installs the pinned Helm CLI required by Helm-enabled projects.
+// The runner profile deliberately remains a general-purpose execution contract;
+// project-specific tools are declared in generated workflow source instead of
+// depending on mutable runner image contents.
+func SetupHelmStep() *JobStep {
+	return &JobStep{
+		Name: "Set up Helm",
+		Uses: ActionRef{
+			Image:   "Azure/setup-helm@" + config.SetupHelmActionRef,
+			Comment: "version: " + config.SetupHelmActionVersion,
+		},
+		With: map[string]string{
+			"version": config.HelmCLIVersion,
+		},
+	}
+}
+
+// ConfigureHelmEnvironmentStep gives a job an isolated Helm state directory.
+// Plugin installation, registry credentials, and caches must not leak across
+// candidates through a mutable self-hosted runner home directory.
+func ConfigureHelmEnvironmentStep() *JobStep {
+	return Step("Configure Helm environment").SetCommand(`mkdir -p "$RUNNER_TEMP/kres-helm/config" "$RUNNER_TEMP/kres-helm/cache" "$RUNNER_TEMP/kres-helm/data"
+printf '%s\n' \
+  "HELM_CONFIG_HOME=$RUNNER_TEMP/kres-helm/config" \
+  "HELM_CACHE_HOME=$RUNNER_TEMP/kres-helm/cache" \
+  "HELM_DATA_HOME=$RUNNER_TEMP/kres-helm/data" >> "$GITHUB_ENV"`)
 }
 
 // DefaultSteps returns default steps for the workflow.
 func DefaultSteps() []*JobStep {
 	return append(
 		CommonSteps(),
+		SetupQemuStep(),
 		SetupBuildxStep(),
 	)
 }
 
 // DefaultPkgsSteps returns default pkgs steps for the workflow.
-func DefaultPkgsSteps(withCrossBuilder bool) []*JobStep {
-	withMap := map[string]string{
-		"driver":   "remote",
-		"endpoint": "tcp://buildkit-amd64.ci.svc.cluster.local:1234",
-	}
-
-	if withCrossBuilder {
-		withMap["append"] = strings.TrimPrefix(armbuildkitdEnpointConfig, "\n")
-	}
-
+//
+// withCrossBuilder is retained for the public generator API. The old upstream
+// arm64 endpoint no longer exists in the Sylphx execution plane; the local
+// QEMU-backed builder provides the same cross-architecture capability.
+func DefaultPkgsSteps(_ bool) []*JobStep {
 	return append(
 		CommonSteps(),
-		&JobStep{
-			Name: "Set up Docker Buildx",
-			ID:   "setup-buildx",
-			Uses: ActionRef{
-				Image:   "docker/setup-buildx-action@" + config.SetupBuildxActionRef,
-				Comment: "version: " + config.SetupBuildxActionVersion,
-			},
-			With: withMap,
-		},
+		SetupQemuStep(),
+		buildxSetupStep(map[string]string{"driver": "docker-container"}, 0),
 	)
 }
 
@@ -825,9 +886,9 @@ func (step *JobStep) SetConditions(conditions ...string) error {
 
 		switch condition {
 		case "except-pull-request":
-			step.appendIf("github.event_name != 'pull_request'")
+			step.appendIf(nonIntegrationCandidateCondition)
 		case "on-pull-request":
-			step.appendIf("github.event_name == 'pull_request'")
+			step.appendIf(integrationCandidateCondition)
 		case "only-on-tag":
 			step.appendIf("startsWith(github.ref, 'refs/tags/')")
 		case "only-on-stable-tag": // tag push, excluding pre-release versions (those containing '-')
@@ -892,9 +953,9 @@ func (job *Job) SetConditions(conditions ...string) error {
 
 		switch condition {
 		case "except-pull-request":
-			job.appendIf("github.event_name != 'pull_request'")
+			job.appendIf(nonIntegrationCandidateCondition)
 		case "on-pull-request":
-			job.appendIf("github.event_name == 'pull_request'")
+			job.appendIf(integrationCandidateCondition)
 		case "only-on-tag":
 			job.appendIf("startsWith(github.ref, 'refs/tags/')")
 		case "only-on-stable-tag": // tag push, excluding pre-release versions (those containing '-')

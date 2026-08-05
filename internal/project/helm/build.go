@@ -143,11 +143,19 @@ fi`, helm.meta.HelmChartDir))
 		Script(fmt.Sprintf("@helm lint %s", helm.meta.HelmChartDir))
 
 	output.Target("helm-plugin-install").
-		Description("Install helm plugins").
+		Description("Install pinned helm plugins").
 		Phony().
 		Script(
-			fmt.Sprintf("-helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false --version=%s", config.HelmUnitTestVersion),
-			fmt.Sprintf("-helm plugin install https://github.com/losisin/helm-values-schema-json.git --verify=false --version=%s", config.HelmValuesSchemaJSONVersion),
+			fmt.Sprintf(`@set -e; \
+if helm plugin list | awk '$$1 == "unittest" { found = 1 } END { exit(found ? 0 : 1) }'; then \
+  helm plugin uninstall unittest; \
+fi; \
+helm plugin install https://github.com/helm-unittest/helm-unittest.git --version=%s`, config.HelmUnitTestVersion),
+			fmt.Sprintf(`@set -e; \
+if helm plugin list | awk '$$1 == "schema" { found = 1 } END { exit(found ? 0 : 1) }'; then \
+  helm plugin uninstall schema; \
+fi; \
+helm plugin install https://github.com/losisin/helm-values-schema-json.git --version=%s`, config.HelmValuesSchemaJSONVersion),
 		)
 
 	output.Target("kuttl-plugin-install").
@@ -247,7 +255,6 @@ func (helm *Build) CompileGitHubWorkflow(output *ghworkflow.Output) error {
 	}
 
 	helmLoginStep := ghworkflow.Step("helm login").
-		SetEnv("HELM_CONFIG_HOME", "/var/tmp/.config/helm").
 		SetCommand(fmt.Sprintf("helm registry login -u %s -p ${{ secrets.GITHUB_TOKEN }} ghcr.io", "${{ github.repository_owner }}"))
 
 	if err := helmLoginStep.SetConditions(releaseCondition); err != nil {
@@ -255,7 +262,6 @@ func (helm *Build) CompileGitHubWorkflow(output *ghworkflow.Output) error {
 	}
 
 	helmReleaseStep := ghworkflow.Step("Release chart").
-		SetEnv("HELM_CONFIG_HOME", "/var/tmp/.config/helm").
 		SetMakeStep("helm-release")
 
 	if err := helmReleaseStep.SetConditions(releaseCondition); err != nil {
@@ -265,8 +271,20 @@ func (helm *Build) CompileGitHubWorkflow(output *ghworkflow.Output) error {
 	jobPermissions := ghworkflow.DefaultJobPermissions()
 	jobPermissions["id-token"] = "write"
 
+	// Helm is a project dependency, not an implicit runner-image dependency.
+	// Place the setup in the default workflow too because check-dirty regenerates
+	// Helm artifacts before the dedicated Helm workflow runs.
+	output.AddStepAfter(
+		ghworkflow.DefaultJobName,
+		"setup-buildx",
+		ghworkflow.SetupHelmStep(),
+		ghworkflow.ConfigureHelmEnvironmentStep(),
+	)
+
 	jobSteps := []*ghworkflow.JobStep{
 		ghworkflow.SetupBuildxStep(),
+		ghworkflow.SetupHelmStep(),
+		ghworkflow.ConfigureHelmEnvironmentStep(),
 		loginStep,
 		lintStep,
 		templateStep,

@@ -68,32 +68,37 @@ func (builder *builder) DetectGit() (bool, error) {
 		return true, err
 	}
 
-	var upstreamRemote *git.Remote
+	// The repository's origin is the durable authority for generated project
+	// settings. A fork commonly retains `upstream` for synchronization, but
+	// using it here would make `make rekres` regenerate workflow/image settings
+	// for somebody else's organization. Fall back to upstream only when origin
+	// is genuinely absent.
+	var sourceRemote *git.Remote
 
 	for _, remote := range remotes {
-		if remote.Config().Name == "upstream" {
-			upstreamRemote = remote
+		if remote.Config().Name == git.DefaultRemoteName {
+			sourceRemote = remote
 
 			break
 		}
 	}
 
-	if upstreamRemote == nil {
+	if sourceRemote == nil {
 		for _, remote := range remotes {
-			if remote.Config().Name == "origin" {
-				upstreamRemote = remote
+			if remote.Config().Name == "upstream" {
+				sourceRemote = remote
 
 				break
 			}
 		}
 	}
 
-	if upstreamRemote == nil {
-		return true, errors.New("neither 'origin' or 'upstream' remote found")
+	if sourceRemote == nil {
+		return true, errors.New("neither 'origin' nor 'upstream' remote found")
 	}
 
 	remoteURLregexp := `((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})[:/]+([^/:]+)/([^/]+)\.git$`
-	for _, remoteURL := range upstreamRemote.Config().URLs {
+	for _, remoteURL := range sourceRemote.Config().URLs {
 		matches := regexp.MustCompile(remoteURLregexp).FindStringSubmatch(remoteURL)
 		if len(matches) == 4 {
 			if matches[1] != "github.com" {
@@ -107,7 +112,7 @@ func (builder *builder) DetectGit() (bool, error) {
 		}
 	}
 
-	return true, fmt.Errorf("failed to parse remote URL: %s", upstreamRemote)
+	return true, fmt.Errorf("failed to parse remote URL: %s", sourceRemote)
 }
 
 // BuildGit builds steps for Git repository.
