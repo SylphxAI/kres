@@ -231,8 +231,8 @@ func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	defaultSteps := ghworkflow.SetupBuildxSteps()
 
 	for _, tc := range []struct {
-		steps []*ghworkflow.JobStep
 		name  string
+		steps []*ghworkflow.JobStep
 	}{
 		{
 			name:  "default workflow",
