@@ -193,7 +193,7 @@ func TestParallelJobTreatsMergeGroupAsIntegrationCandidate(t *testing.T) {
 	assert.Contains(t, string(buf.Bytes()), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
 }
 
-func TestRemoteBuildxSetupUsesJobLocalConfig(t *testing.T) {
+func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	packageSteps := ghworkflow.DefaultPkgsSteps(false)
 
 	for _, tc := range []struct {
@@ -210,10 +210,15 @@ func TestRemoteBuildxSetupUsesJobLocalConfig(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, "remote", tc.step.With["driver"])
+			require.Equal(t, "docker-container", tc.step.With["driver"])
+			require.NotContains(t, tc.step.With, "endpoint")
 			require.Equal(t, "${{ runner.temp }}/kres-buildx", tc.step.Env["BUILDX_CONFIG"])
 		})
 	}
+
+	qemu := ghworkflow.SetupQemuStep()
+	require.Equal(t, "all", qemu.With["platforms"])
+	require.Contains(t, qemu.Uses.Image, "docker/setup-qemu-action@")
 }
 
 func TestSetConditionsTreatMergeGroupAsIntegrationCandidate(t *testing.T) {

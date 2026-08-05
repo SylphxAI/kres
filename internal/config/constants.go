@@ -115,6 +115,10 @@ const (
 	// renovate: datasource=github-tags depName=docker/setup-buildx-action
 	SetupBuildxActionVersion = "v4.2.0"
 	SetupBuildxActionRef     = "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"
+	// SetupQemuActionVersion is the version of setup-qemu github action.
+	// renovate: datasource=github-tags depName=docker/setup-qemu-action
+	SetupQemuActionVersion = "v4.2.0"
+	SetupQemuActionRef     = "96fe6ef7f33517b61c61be40b68a1882f3264fb8"
 	// SetupNodeActionVersion is the version of setup-node github action.
 	// renovate: datasource=github-tags depName=actions/setup-node
 	SetupNodeActionVersion = "v6.4.0"

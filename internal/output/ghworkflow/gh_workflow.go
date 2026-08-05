@@ -138,11 +138,6 @@ func (p Permissions) IsZero() bool {
 var (
 	//go:embed files/slack-notify-payload.json
 	slackNotifyPayload string
-
-	armbuildkitdEnpointConfig = `
-- endpoint: tcp://buildkit-arm64.ci.svc.cluster.local:1234
-  platforms: linux/arm64
-`
 )
 
 // Output implements GitHub Actions project config generation.
@@ -597,11 +592,12 @@ func DefaultJobPermissions() map[string]PermissionAction {
 
 const buildxConfigDir = "${{ runner.temp }}/kres-buildx"
 
-// buildxSetupStep configures an isolated Buildx config directory for every
-// remote builder. Self-hosted runners can carry a default BuildKit config in
-// their home directory; Buildx automatically loads it and the remote driver
-// rejects config files. runner.temp is unique to the job and empty when this
-// step starts, so it prevents runner-local state from changing a candidate.
+// buildxSetupStep configures an isolated local Buildx builder. The former
+// upstream TCP endpoint is not part of the Sylphx execution-plane contract;
+// every owned runner brings its own Docker daemon. The docker-container driver
+// keeps builder lifecycle local to the candidate while QEMU provides the
+// required non-native build architectures. runner.temp is unique to the job,
+// so runner-local Buildx state cannot affect a candidate.
 func buildxSetupStep(with map[string]string, timeoutMinutes int) *JobStep {
 	return &JobStep{
 		Name: "Set up Docker Buildx",
@@ -618,11 +614,26 @@ func buildxSetupStep(with map[string]string, timeoutMinutes int) *JobStep {
 	}
 }
 
-// SetupBuildxStep returns the buildx setup step.
+// SetupQemuStep registers supported non-native CPU emulators before Buildx
+// creates its builder. This is required for the generated multi-architecture
+// image targets and keeps the architecture capability on owned compute.
+func SetupQemuStep() *JobStep {
+	return &JobStep{
+		Name: "Set up QEMU",
+		Uses: ActionRef{
+			Image:   "docker/setup-qemu-action@" + config.SetupQemuActionRef,
+			Comment: "version: " + config.SetupQemuActionVersion,
+		},
+		With: map[string]string{
+			"platforms": "all",
+		},
+	}
+}
+
+// SetupBuildxStep returns the local Buildx setup step.
 func SetupBuildxStep() *JobStep {
 	return buildxSetupStep(map[string]string{
-		"driver":   "remote",
-		"endpoint": "tcp://buildkit-amd64.ci.svc.cluster.local:1234",
+		"driver": "docker-container",
 	}, 10)
 }
 
@@ -630,24 +641,21 @@ func SetupBuildxStep() *JobStep {
 func DefaultSteps() []*JobStep {
 	return append(
 		CommonSteps(),
+		SetupQemuStep(),
 		SetupBuildxStep(),
 	)
 }
 
 // DefaultPkgsSteps returns default pkgs steps for the workflow.
-func DefaultPkgsSteps(withCrossBuilder bool) []*JobStep {
-	withMap := map[string]string{
-		"driver":   "remote",
-		"endpoint": "tcp://buildkit-amd64.ci.svc.cluster.local:1234",
-	}
-
-	if withCrossBuilder {
-		withMap["append"] = strings.TrimPrefix(armbuildkitdEnpointConfig, "\n")
-	}
-
+//
+// withCrossBuilder is retained for the public generator API. The old upstream
+// arm64 endpoint no longer exists in the Sylphx execution plane; the local
+// QEMU-backed builder provides the same cross-architecture capability.
+func DefaultPkgsSteps(_ bool) []*JobStep {
 	return append(
 		CommonSteps(),
-		buildxSetupStep(withMap, 0),
+		SetupQemuStep(),
+		buildxSetupStep(map[string]string{"driver": "docker-container"}, 0),
 	)
 }
 
