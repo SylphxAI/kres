@@ -193,6 +193,20 @@ func TestParallelJobTreatsMergeGroupAsIntegrationCandidate(t *testing.T) {
 	assert.Contains(t, string(buf.Bytes()), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
 }
 
+func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
+	step := ghworkflow.SetupHelmStep()
+
+	require.Equal(t, "Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310", step.Uses.Image)
+	require.Equal(t, "version: v5.0.1", step.Uses.Comment)
+	require.Equal(t, "v3.21.3", step.With["version"])
+
+	environment := ghworkflow.ConfigureHelmEnvironmentStep()
+	require.Contains(t, environment.Run, "HELM_CONFIG_HOME=$RUNNER_TEMP/kres-helm/config")
+	require.Contains(t, environment.Run, "HELM_CACHE_HOME=$RUNNER_TEMP/kres-helm/cache")
+	require.Contains(t, environment.Run, "HELM_DATA_HOME=$RUNNER_TEMP/kres-helm/data")
+	require.Contains(t, environment.Run, `>> "$GITHUB_ENV"`)
+}
+
 func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	packageSteps := ghworkflow.DefaultPkgsSteps(false)
 

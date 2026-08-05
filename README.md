@@ -17,6 +17,13 @@ Following output files are generated automatically:
 * `.codecov.yml`
 * `LICENSE`
 
+## SylphxAI Fork
+
+This fork is the source generator for Sylphx-managed build and GitHub Actions
+instructions. Its generated workflows select static Sylphx-owned runner profiles
+and are merge-queue capable; projects declare their required toolchains in the
+generated workflow rather than relying on mutable runner-image contents.
+
 ## Access Tokens
 
 Kres can leverage API access tokens to set up build environment or settings for the project:
@@ -27,7 +34,7 @@ Kres can leverage API access tokens to set up build environment or settings for 
 
 When running Kres for the first time, run it manually via Docker container:
 
-    docker run --rm -v ${PWD}:/src -w /src -e GITHUB_TOKEN ghcr.io/siderolabs/kres:latest
+    docker run --rm -v ${PWD}:/src -w /src -e GITHUB_TOKEN ghcr.io/sylphxai/kres:latest
 
 To update build instructions:
 

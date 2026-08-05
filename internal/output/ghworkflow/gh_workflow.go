@@ -637,6 +637,34 @@ func SetupBuildxStep() *JobStep {
 	}, 10)
 }
 
+// SetupHelmStep installs the pinned Helm CLI required by Helm-enabled projects.
+// The runner profile deliberately remains a general-purpose execution contract;
+// project-specific tools are declared in generated workflow source instead of
+// depending on mutable runner image contents.
+func SetupHelmStep() *JobStep {
+	return &JobStep{
+		Name: "Set up Helm",
+		Uses: ActionRef{
+			Image:   "Azure/setup-helm@" + config.SetupHelmActionRef,
+			Comment: "version: " + config.SetupHelmActionVersion,
+		},
+		With: map[string]string{
+			"version": config.HelmCLIVersion,
+		},
+	}
+}
+
+// ConfigureHelmEnvironmentStep gives a job an isolated Helm state directory.
+// Plugin installation, registry credentials, and caches must not leak across
+// candidates through a mutable self-hosted runner home directory.
+func ConfigureHelmEnvironmentStep() *JobStep {
+	return Step("Configure Helm environment").SetCommand(`mkdir -p "$RUNNER_TEMP/kres-helm/config" "$RUNNER_TEMP/kres-helm/cache" "$RUNNER_TEMP/kres-helm/data"
+printf '%s\n' \
+  "HELM_CONFIG_HOME=$RUNNER_TEMP/kres-helm/config" \
+  "HELM_CACHE_HOME=$RUNNER_TEMP/kres-helm/cache" \
+  "HELM_DATA_HOME=$RUNNER_TEMP/kres-helm/data" >> "$GITHUB_ENV"`)
+}
+
 // DefaultSteps returns default steps for the workflow.
 func DefaultSteps() []*JobStep {
 	return append(
