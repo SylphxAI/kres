@@ -648,15 +648,6 @@ func SetupQemuStep() *JobStep {
 	}
 }
 
-// SetupBuildxStep returns the local Buildx setup action. Callers that run
-// later Docker Buildx commands must use SetupBuildxSteps so the selected
-// builder's isolated configuration remains available for the whole job.
-func SetupBuildxStep() *JobStep {
-	return buildxSetupStep(map[string]string{
-		"driver": "docker-container",
-	}, 10)
-}
-
 // SetupBuildxSteps returns the persistent environment setup and the local
 // Buildx action in their required order.
 func SetupBuildxSteps() []*JobStep {
