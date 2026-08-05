@@ -117,6 +117,7 @@ type JobEnvironment struct {
 type Job struct {
 	Name           string             `yaml:"name,omitempty"`
 	Permissions    Permissions        `yaml:"permissions,omitempty"`
+	Env            map[string]string  `yaml:"env,omitempty"`
 	RunsOn         RunsOn             `yaml:"runs-on"`
 	If             string             `yaml:"if,omitempty"`
 	Strategy       *Strategy          `yaml:"strategy,omitempty"`

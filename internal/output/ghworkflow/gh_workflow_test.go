@@ -193,6 +193,25 @@ func TestParallelJobTreatsMergeGroupAsIntegrationCandidate(t *testing.T) {
 	assert.Contains(t, buf.String(), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
 }
 
+func TestSlackNotificationsUseOptionalIncomingWebhook(t *testing.T) {
+	o := ghworkflow.NewOutput("main", true, false, "ci-failure")
+
+	for _, workflow := range []string{ghworkflow.SlackCIFailureWorkflow, ".github/workflows/slack-notify.yaml"} {
+		t.Run(workflow, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			require.NoError(t, o.GenerateFile(workflow, &buf))
+
+			content := buf.String()
+			assert.Contains(t, content, "SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}")
+			assert.Contains(t, content, "if: env.SLACK_WEBHOOK != ''")
+			assert.Contains(t, content, "webhook: ${{ env.SLACK_WEBHOOK }}")
+			assert.Contains(t, content, "webhook-type: incoming-webhook")
+			assert.NotContains(t, content, "SLACK_BOT_TOKEN_V2")
+		})
+	}
+}
+
 func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
 	step := ghworkflow.SetupHelmStep()
 

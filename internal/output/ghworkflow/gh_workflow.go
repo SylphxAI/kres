@@ -187,6 +187,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			},
 			Jobs: map[string]*Job{
 				slackJobName: {
+					Env: map[string]string{
+						"SLACK_WEBHOOK": "${{ secrets.SLACK_WEBHOOK }}",
+					},
 					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					If:     "github.event.workflow_run.conclusion != 'skipped'",
 					Steps: []*JobStep{
@@ -203,8 +206,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 								"slackapi/slack-github-action@"+config.SlackNotifyActionRef,
 								"version: "+config.SlackNotifyActionVersion,
 							).
-							SetWith("token", "${{ secrets.SLACK_BOT_TOKEN_V2 }}").
-							SetWith("method", "chat.postMessage").
+							SetCustomCondition("env.SLACK_WEBHOOK != ''").
+							SetWith("webhook", "${{ env.SLACK_WEBHOOK }}").
+							SetWith("webhook-type", "incoming-webhook").
 							SetWith("payload", DefaultSlackNotifyPayload("", true)),
 					},
 				},
@@ -222,6 +226,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 			Permissions: map[string]PermissionAction{},
 			Jobs: map[string]*Job{
 				slackJobName: {
+					Env: map[string]string{
+						"SLACK_WEBHOOK": "${{ secrets.SLACK_WEBHOOK }}",
+					},
 					RunsOn: NewRunsOnGroupLabel(GenericRunner, ""),
 					If:     "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event != 'pull_request'",
 					Steps: []*JobStep{
@@ -230,8 +237,9 @@ func NewOutput(mainBranch string, withDefaultJob, withStaleJob bool, slackChanne
 								"slackapi/slack-github-action@"+config.SlackNotifyActionRef,
 								"version: "+config.SlackNotifyActionVersion,
 							).
-							SetWith("token", "${{ secrets.SLACK_BOT_TOKEN_V2 }}").
-							SetWith("method", "chat.postMessage").
+							SetCustomCondition("env.SLACK_WEBHOOK != ''").
+							SetWith("webhook", "${{ env.SLACK_WEBHOOK }}").
+							SetWith("webhook-type", "incoming-webhook").
 							SetWith("payload", DefaultSlackNotifyPayload(slackChannel, false)),
 					},
 				},
