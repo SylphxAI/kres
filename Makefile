@@ -17,7 +17,7 @@ CI_RELEASE_TAG := $(shell git log --oneline --format=%B -n 1 HEAD^2 -- 2>/dev/nu
 WITH_DEBUG ?= false
 WITH_RACE ?= false
 REGISTRY ?= ghcr.io
-USERNAME ?= siderolabs
+USERNAME ?= sylphxai
 REGISTRY_AND_USERNAME ?= $(REGISTRY)/$(USERNAME)
 PROTOBUF_GO_VERSION ?= 1.36.11
 GRPC_GO_VERSION ?= 1.6.2
@@ -43,7 +43,7 @@ IMAGE_SIGNER_IMAGE ?= ghcr.io/siderolabs/image-signer:v0.3.2
 HELMREPO ?= $(REGISTRY)/$(USERNAME)/charts
 COSIGN_ARGS ?=
 HELMDOCS_VERSION ?= v1.14.2
-KRES_IMAGE ?= ghcr.io/siderolabs/kres:latest
+KRES_IMAGE ?= ghcr.io/sylphxai/kres:latest
 CONFORMANCE_IMAGE ?= ghcr.io/siderolabs/conform:latest
 
 # docker build settings

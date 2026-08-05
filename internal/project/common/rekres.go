@@ -26,7 +26,10 @@ func NewReKres(meta *meta.Options) *ReKres {
 
 		meta: meta,
 
-		KresImage: "ghcr.io/siderolabs/kres:latest",
+		// Sylphx owns the fleet runner and workflow profile. Re-generation must
+		// consume the matching Sylphx Kres image; otherwise a later `make rekres`
+		// could silently restore upstream GitHub-hosted runner defaults.
+		KresImage: "ghcr.io/sylphxai/kres:latest",
 	}
 }
 

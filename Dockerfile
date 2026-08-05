@@ -214,6 +214,6 @@ ARG TARGETARCH
 COPY --from=kres kres-linux-${TARGETARCH} /kres
 COPY --from=image-fhs / /
 COPY --from=image-ca-certificates / /
-LABEL org.opencontainers.image.source=https://github.com/siderolabs/kres
+LABEL org.opencontainers.image.source=https://github.com/SylphxAI/kres
 ENTRYPOINT ["/kres","gen"]
 

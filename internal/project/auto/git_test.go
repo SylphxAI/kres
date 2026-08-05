@@ -52,6 +52,34 @@ func TestDetectGitWorktree(t *testing.T) {
 	assert.Equal(t, "example", options.GitHubRepository)
 }
 
+func TestDetectGitPrefersOriginOverUpstream(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+
+	root := filepath.Join(t.TempDir(), "repo")
+
+	runGit(t, "", "init", root)
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "config", "commit.gpgsign", "false")
+	runGit(t, root, "commit", "--allow-empty", "-m", "init")
+	runGit(t, root, "branch", "-M", "main")
+	runGit(t, root, "remote", "add", "origin", "git@github.com:SylphxAI/kres.git")
+	runGit(t, root, "remote", "add", "upstream", "git@github.com:siderolabs/kres.git")
+	runGit(t, root, "config", "branch.main.remote", "origin")
+	runGit(t, root, "config", "branch.main.merge", "refs/heads/main")
+
+	t.Chdir(root)
+
+	options := &meta.Options{CompileGithubWorkflowsOnly: true}
+
+	_, err := auto.Build(options)
+	require.NoError(t, err)
+	assert.Equal(t, "SylphxAI", options.GitHubOrganization)
+	assert.Equal(t, "kres", options.GitHubRepository)
+}
+
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 

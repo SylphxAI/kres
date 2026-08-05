@@ -16,6 +16,9 @@ concurrency:
     branches:
       - main
       - release-*
+  merge_group:
+    types:
+      - checks_requested
 name: default
 jobs:
   default:
@@ -26,7 +29,8 @@ jobs:
       packages: write
       pull-requests: read
     runs-on:
-      group: generic
+      - self-hosted
+      - sylphx-linux-standard
     if: (!startsWith(github.head_ref, 'renovate/') && !startsWith(github.head_ref,
       'dependabot/'))
     outputs:
@@ -68,6 +72,8 @@ jobs:
         with:
           driver: remote
           endpoint: tcp://buildkit-amd64.ci.svc.cluster.local:1234
+        env:
+          BUILDX_CONFIG: ${{ runner.temp }}/kres-buildx
         timeout-minutes: 10
       - name: Retrieve PR labels
         id: retrieve-pr-labels

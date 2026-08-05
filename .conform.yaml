@@ -9,7 +9,7 @@ policies:
       gpg:
         required: true
         identity:
-          gitHubOrganization: siderolabs
+          gitHubOrganization: SylphxAI
       spellcheck:
         locale: US
       maximumOfOneCommit: false
