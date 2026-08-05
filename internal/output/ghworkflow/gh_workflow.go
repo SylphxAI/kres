@@ -135,10 +135,8 @@ func (p Permissions) IsZero() bool {
 	return p == nil
 }
 
-var (
-	//go:embed files/slack-notify-payload.json
-	slackNotifyPayload string
-)
+//go:embed files/slack-notify-payload.json
+var slackNotifyPayload string
 
 // Output implements GitHub Actions project config generation.
 type Output struct {
@@ -354,11 +352,11 @@ func (o *Output) AddWorkflow(name string, workflow *Workflow) {
 // conservatively; CI code remains responsible for any finer-grained work
 // selection.
 func addMergeGroupTrigger(workflow *Workflow) {
-	if workflow == nil || workflow.On.MergeGroup != nil || !workflowHasPullRequestTrigger(workflow.On.PullRequest) {
+	if workflow == nil || workflow.MergeGroup != nil || !workflowHasPullRequestTrigger(workflow.PullRequest) {
 		return
 	}
 
-	workflow.On.MergeGroup = &MergeGroup{Types: []string{"checks_requested"}}
+	workflow.MergeGroup = &MergeGroup{Types: []string{"checks_requested"}}
 }
 
 func workflowHasPullRequestTrigger(pullRequest PullRequest) bool {

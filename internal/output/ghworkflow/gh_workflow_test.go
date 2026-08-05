@@ -95,8 +95,8 @@ func TestAddWorkflowAddsMergeGroupForPullRequestWorkflow(t *testing.T) {
 
 	o.AddWorkflow("candidate", workflow)
 
-	require.NotNil(t, workflow.On.MergeGroup)
-	assert.Equal(t, []string{"checks_requested"}, workflow.On.MergeGroup.Types)
+	require.NotNil(t, workflow.MergeGroup)
+	assert.Equal(t, []string{"checks_requested"}, workflow.MergeGroup.Types)
 }
 
 func TestSetConditionsNotCancelled(t *testing.T) {
@@ -190,7 +190,7 @@ func TestParallelJobTreatsMergeGroupAsIntegrationCandidate(t *testing.T) {
 	var buf bytes.Buffer
 
 	require.NoError(t, o.GenerateFile(ghworkflow.CiWorkflow, &buf))
-	assert.Contains(t, string(buf.Bytes()), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
+	assert.Contains(t, buf.String(), "if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')")
 }
 
 func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
@@ -211,8 +211,8 @@ func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	packageSteps := ghworkflow.DefaultPkgsSteps(false)
 
 	for _, tc := range []struct {
-		name string
 		step *ghworkflow.JobStep
+		name string
 	}{
 		{
 			name: "default workflow",
@@ -238,8 +238,8 @@ func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 func TestSetConditionsTreatMergeGroupAsIntegrationCandidate(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
-		conditions []string
 		wantIf     string
+		conditions []string
 	}{
 		{
 			name:       "on pull request includes merge group",

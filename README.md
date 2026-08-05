@@ -20,9 +20,11 @@ Following output files are generated automatically:
 ## SylphxAI Fork
 
 This fork is the source generator for Sylphx-managed build and GitHub Actions
-instructions. Its generated workflows select static Sylphx-owned runner profiles
-and are merge-queue capable; projects declare their required toolchains in the
-generated workflow rather than relying on mutable runner-image contents.
+instructions.
+Its generated workflows select static Sylphx-owned runner profiles and are
+merge-queue capable.
+Projects declare their required toolchains in the generated workflow rather
+than relying on mutable runner-image contents.
 
 ## Access Tokens
 
