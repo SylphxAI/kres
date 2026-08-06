@@ -226,6 +226,32 @@ func TestSetupHelmStepPinsActionAndCLI(t *testing.T) {
 	require.Contains(t, environment.Run, `>> "$GITHUB_ENV"`)
 }
 
+func TestSetupSOPSToolsPinsAndVerifiesBinaries(t *testing.T) {
+	step := ghworkflow.SetupSOPSToolsStep()
+
+	require.Equal(t, "Set up SOPS and yq", step.Name)
+	assert.Contains(t, step.Run, `RUNNER_OS`)
+	assert.Contains(t, step.Run, `RUNNER_ARCH`)
+	assert.Contains(t, step.Run, `sops-v3.13.3.linux.${sops_arch}`)
+	assert.Contains(t, step.Run, `yq_linux_${yq_arch}`)
+	assert.Contains(t, step.Run, `e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b`)
+	assert.Contains(t, step.Run, `53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77`)
+	assert.Contains(t, step.Run, `fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4`)
+	assert.Contains(t, step.Run, `578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea`)
+	assert.Contains(t, step.Run, `sha256sum --check --status -`)
+	assert.Contains(t, step.Run, `GITHUB_PATH`)
+	assert.Contains(t, step.Run, `chmod 0755`)
+}
+
+func TestSOPSStepsProvisionToolsBeforeSecretAccess(t *testing.T) {
+	steps := ghworkflow.SOPSSteps()
+
+	require.Len(t, steps, 3)
+	require.Equal(t, "Set up SOPS and yq", steps[0].Name)
+	require.Equal(t, "Mask secrets", steps[1].Name)
+	require.Equal(t, "Set secrets for job", steps[2].Name)
+}
+
 func TestOwnedBuildxSetupUsesLocalQemuBackedBuilder(t *testing.T) {
 	packageSteps := ghworkflow.DefaultPkgsSteps(false)
 	defaultSteps := ghworkflow.SetupBuildxSteps()

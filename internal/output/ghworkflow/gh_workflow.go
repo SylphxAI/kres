@@ -702,18 +702,97 @@ func DefaultPkgsSteps(_ bool) []*JobStep {
 	return append(steps, buildxSetupSteps(map[string]string{"driver": "docker-container"}, 0)...)
 }
 
-// SOPSSteps returns SOPS steps for the workflow.
+// SetupSOPSToolsStep installs the pinned SOPS and yq CLIs required by
+// generated secret-loading steps. The tools are installed into RUNNER_TEMP,
+// verified before they become executable, and exposed through GITHUB_PATH so
+// they cannot depend on mutable state in a persistent self-hosted runner.
+func SetupSOPSToolsStep() *JobStep {
+	return Step("Set up SOPS and yq").SetCommand(fmt.Sprintf(
+		`set -euo pipefail
+
+if [ "${RUNNER_OS:-}" != "Linux" ]; then
+  echo "Kres requires a Linux self-hosted runner for SOPS and yq (RUNNER_OS=${RUNNER_OS:-unset})" >&2
+  exit 1
+fi
+
+case "${RUNNER_ARCH:-}" in
+  X64)
+    sops_arch=amd64
+    yq_arch=amd64
+    sops_sha256=%s
+    yq_sha256=%s
+    ;;
+  ARM64)
+    sops_arch=arm64
+    yq_arch=arm64
+    sops_sha256=%s
+    yq_sha256=%s
+    ;;
+  *)
+    echo "Kres supports only Linux X64 and ARM64 self-hosted runners (RUNNER_ARCH=${RUNNER_ARCH:-unset})" >&2
+    exit 1
+    ;;
+esac
+
+for command_name in curl sha256sum chmod mkdir mv; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Kres requires $command_name to install verified SOPS and yq tools" >&2
+    exit 1
+  fi
+done
+
+tool_dir="${RUNNER_TEMP:?RUNNER_TEMP must be set}/kres-tools"
+mkdir -p "$tool_dir"
+
+download_and_verify() {
+  local url="$1"
+  local destination="$2"
+  local expected_sha256="$3"
+  local temporary="${destination}.download"
+
+  curl --fail --location --retry 3 --retry-delay 1 --silent --show-error \
+    "$url" -o "$temporary"
+  printf '%%s  %%s\n' "$expected_sha256" "$temporary" | sha256sum --check --status -
+  mv "$temporary" "$destination"
+  chmod 0755 "$destination"
+}
+
+download_and_verify \
+  "https://github.com/getsops/sops/releases/download/%s/sops-%s.linux.${sops_arch}" \
+  "$tool_dir/sops" \
+  "$sops_sha256"
+download_and_verify \
+  "https://github.com/mikefarah/yq/releases/download/%s/yq_linux_${yq_arch}" \
+  "$tool_dir/yq" \
+  "$yq_sha256"
+
+printf '%%s\n' "$tool_dir" >> "${GITHUB_PATH:?GITHUB_PATH must be set}"
+`,
+		config.SopsLinuxAmd64SHA256,
+		config.YqLinuxAmd64SHA256,
+		config.SopsLinuxArm64SHA256,
+		config.YqLinuxArm64SHA256,
+		config.SopsVersion,
+		config.SopsVersion,
+		config.YqVersion,
+	))
+}
+
+// SOPSSteps returns the verified tool setup and SOPS steps for the workflow.
+// Keeping setup here makes every caller safe, including custom and parallel
+// jobs that do not pass through the common workflow compiler.
 func SOPSSteps() []*JobStep {
-	return []*JobStep{
-		{
+	return append(
+		[]*JobStep{SetupSOPSToolsStep()},
+		&JobStep{
 			Name: "Mask secrets",
 			Run:  "echo \"$(sops -d .secrets.yaml | yq -e '.secrets | to_entries[] | \"::add-mask::\" + .value')\"\n",
 		},
-		{
+		&JobStep{
 			Name: "Set secrets for job",
 			Run:  "sops -d .secrets.yaml | yq -e '.secrets | to_entries[] | .key + \"=\" + .value' >> \"$GITHUB_ENV\"\n",
 		},
-	}
+	)
 }
 
 // slackNotifyTextWithPR is the ternary expression in [slackNotifyPayload]
