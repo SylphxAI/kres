@@ -3,7 +3,7 @@ module github.com/siderolabs/kres
 go 1.26.5
 
 require (
-	github.com/go-git/go-git/v5 v5.19.1
+	github.com/go-git/go-git/v5 v5.19.2
 	github.com/google/go-github/v88 v88.0.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/siderolabs/gen v0.8.7
