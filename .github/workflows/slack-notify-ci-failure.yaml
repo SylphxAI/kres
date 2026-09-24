@@ -16,9 +16,7 @@ jobs:
   slack-notify:
     env:
       SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-    runs-on:
-      - self-hosted
-      - sylphx-linux-standard
+    runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event
       != 'pull_request'
     steps:

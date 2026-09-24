@@ -29,9 +29,7 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
-    runs-on:
-      - self-hosted
-      - sylphx-linux-standard
+    runs-on: ubuntu-latest
     if: (!startsWith(github.head_ref, 'renovate/') && !startsWith(github.head_ref,
       'dependabot/'))
     steps:
@@ -154,9 +152,7 @@ jobs:
             _out/sha*.txt
             _out/*.bundle
   lint:
-    runs-on:
-      - self-hosted
-      - sylphx-linux-standard
+    runs-on: ubuntu-latest
     if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     needs:
       - default
@@ -209,9 +205,7 @@ jobs:
         run: |
           make lint
   unit-tests:
-    runs-on:
-      - self-hosted
-      - sylphx-linux-standard
+    runs-on: ubuntu-latest
     if: (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     needs:
       - default
