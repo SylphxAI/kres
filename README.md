@@ -1,5 +1,7 @@
 # Kres
 
+> **Archived — no longer maintained (2026-09-24).** This repository is read-only and has no replacement.
+
 Kres is a tool to automate generation of build instructions based on project structure.
 
 At the moment only Go projects are supported.
